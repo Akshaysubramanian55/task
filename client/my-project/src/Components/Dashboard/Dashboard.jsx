@@ -12,7 +12,7 @@ import {
     TimeScale,
 } from 'chart.js';
 import 'chartjs-adapter-date-fns';
-import { format } from 'date-fns';
+import { format, startOfHour, endOfHour, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 
 ChartJS.register(
     CategoryScale,
@@ -66,14 +66,78 @@ function Dashboard() {
         }
     };
 
+    const aggregateData = (data, unit) => {
+        const result = {};
+        data.forEach(item => {
+            const date = new Date(item.date);
+            let key;
+            switch (unit) {
+                case 'hour':
+                    key = format(startOfHour(date), 'yyyy-MM-dd HH:00:00');
+                    break;
+                case 'day':
+                    key = format(startOfDay(date), 'yyyy-MM-dd');
+                    break;
+                case 'week':
+                    key = format(startOfWeek(date), 'yyyy-ww');
+                    break;
+                case 'month':
+                    key = format(startOfMonth(date), 'yyyy-MM');
+                    break;
+                case 'year':
+                    key = format(startOfYear(date), 'yyyy');
+                    break;
+                default:
+                    return;
+            }
+
+            if (!result[key]) {
+                result[key] = {
+                    count: 0,
+                    pH: 0,
+                    TSS: 0,
+                    TDS: 0,
+                    BOD: 0,
+                    COD: 0,
+                    chloride: 0,
+                };
+            }
+
+            result[key].count += 1;
+            result[key].pH += item.pH;
+            result[key].TSS += item.TSS;
+            result[key].TDS += item.TDS;
+            result[key].BOD += item.BOD;
+            result[key].COD += item.COD;
+            result[key].chloride += item.chloride;
+        });
+
+        Object.keys(result).forEach(key => {
+            result[key].pH /= result[key].count;
+            result[key].TSS /= result[key].count;
+            result[key].TDS /= result[key].count;
+            result[key].BOD /= result[key].count;
+            result[key].COD /= result[key].count;
+            result[key].chloride /= result[key].count;
+        });
+
+        return result;
+    };
+
     const updateChartData = (data) => {
-        const labels = data.map(item => format(new Date(item.date), 'yyyy-MM-dd HH:mm:ss'));
-        const pHData = data.map(item => item.pH);
-        const TSSData = data.map(item => item.TSS);
-        const TDSData = data.map(item => item.TDS);
-        const BODData = data.map(item => item.BOD);
-        const CODData = data.map(item => item.COD);
-        const chlorideData = data.map(item => item.chloride);
+        const unit = selectedTab === 'daily' ? 'hour' :
+            selectedTab === 'weekly' ? 'day' :
+                selectedTab === 'monthly' ? 'month' : 'year';
+
+        const aggregatedData = aggregateData(data, unit);
+
+        const labels = Object.keys(aggregatedData);
+        const pHData = labels.map(label => aggregatedData[label].pH);
+        const TSSData = labels.map(label => aggregatedData[label].TSS);
+        const TDSData = labels.map(label => aggregatedData[label].TDS);
+        const BODData = labels.map(label => aggregatedData[label].BOD);
+        const CODData = labels.map(label => aggregatedData[label].COD);
+        const chlorideData = labels.map(label => aggregatedData[label].chloride);
 
         setChartData({
             labels,
@@ -155,7 +219,7 @@ function Dashboard() {
                 },
             });
             alert('Data submitted successfully!');
-            fetchData(); // Refresh data after submission
+            fetchData();
         } catch (error) {
             console.error('Error submitting data', error);
         } finally {
@@ -175,7 +239,7 @@ function Dashboard() {
                                 time: {
                                     unit: selectedTab === 'daily' ? 'hour' :
                                         selectedTab === 'weekly' ? 'day' :
-                                            selectedTab === 'monthly' ? 'week' : 'month',
+                                            selectedTab === 'monthly' ? 'month' : 'year',
                                 },
                                 title: {
                                     display: true,
@@ -209,6 +273,20 @@ function Dashboard() {
         );
     };
 
+    const getCurrentValues = () => {
+        const latestData = data.length > 0 ? data[data.length - 1] : {};
+        return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {['pH', 'TSS', 'TDS', 'BOD', 'COD', 'chloride'].map((label, index) => (
+                    <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
+                        <h4 className="font-semibold text-gray-700">{label}</h4>
+                        <p className="text-gray-600">{latestData[label] !== undefined ? latestData[label] : 'N/A'}</p>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
     return (
         <div className="bg-gray-100 min-h-screen p-8">
             <div className="bg-white shadow-md rounded-lg p-6 max-w-4xl mx-auto">
@@ -231,14 +309,7 @@ function Dashboard() {
 
                 <div className="mb-6 bg-white shadow-md rounded-lg p-4">
                     <h3 className="text-lg font-semibold mb-4 text-gray-800">Current Values</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {['pH', 'TSS', 'TDS', 'BOD', 'COD', 'Chloride'].map((label, index) => (
-                            <div key={index} className="p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
-                                <h4 className="font-semibold text-gray-700">{label}</h4>
-                                <p className="text-gray-600">{data.length > 0 ? data[data.length - 1][label] : 'N/A'}</p>
-                            </div>
-                        ))}
-                    </div>
+                    {getCurrentValues()}
                 </div>
 
                 <div className="bg-white shadow-md rounded-lg p-6 mb-6">
